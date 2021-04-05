@@ -2,6 +2,8 @@ import sys
 import math
 import pandas as pd
 from scipy.stats import entropy
+import time
+
 
 class Node(object):
     def __init__(self, attribute, threshold):
@@ -17,16 +19,15 @@ class Node(object):
 def select_threshold(df, attribute, predict_attr):
     # Convert dataframe column to a list and round each value
     values = df[attribute].tolist()
-    values = [ float(x) for x in values]
-    # Remove duplicate values by converting the list to a set, then sort the set
-    values = set(values)
-    values = list(values)
+    #values = [ float(x) for x in values]
+    values = list(set(values))
     values.sort()
+    # Remove duplicate values by converting the list to a set, then sort the set
     max_ig = float("-inf")
     thres_val = 0
     # try all threshold values that are half-way between successive values in this sorted list
     for i in range(0, len(values) - 1):
-        thres = (values[i] + values[i+1])/2
+        thres = 0.5 * (values[i] + values[i+1])
         ig = info_gain(df, attribute, predict_attr, thres)
         if ig > max_ig:
             max_ig = ig
@@ -37,20 +38,16 @@ def select_threshold(df, attribute, predict_attr):
 # Calculate info content (entropy) of the test data
 def info_entropy(df, predict_attr):
     # Dataframe and number of positive/negatives examples in the data
-    low_df = df[df[predict_attr] == 5]
-    mid_df = df[df[predict_attr] == 6]
-    high_df = df[df[predict_attr] == 7]
+    low_df = df[df[predict_attr] == 5].shape[0]
+    mid_df = df[df[predict_attr] == 6].shape[0]
+    high_df = df.shape[0] - low_df - mid_df
 
-    dataList = []
-
-    if low_df.shape[0] != 0:
-        dataList.append(float(low_df.shape[0]))
-    if mid_df.shape[0] != 0:
-        dataList.append(float(mid_df.shape[0]))
-    if high_df.shape[0] != 0:
-        dataList.append(float(high_df.shape[0]))
+    e = 0
+    if low_df != 0: e += ((-1*low_df)/df.shape[0]) * math.log(low_df/df.shape[0], 2) 
+    if mid_df != 0: e += ((-1*mid_df)/df.shape[0]) * math.log(mid_df/df.shape[0], 2)
+    if high_df != 0: e += ((-1*high_df)/df.shape[0]) * math.log(high_df/df.shape[0], 2)
     # Calculate entropy
-    return entropy(dataList)
+    return e
 
 
 # Calculates the weighted average of the entropy after an attribute test
@@ -66,7 +63,7 @@ def remainder(df, df_subsets, predict_attr):
 # Calculates the information gain from the attribute test based on a given threshold
 # Note: thresholds can change for the same attribute over time
 def info_gain(df, attribute, predict_attr, threshold):
-    sub_1 = df[df[attribute] < threshold]
+    sub_1 = df[df[attribute] <= threshold]
     sub_2 = df[df[attribute] > threshold]
     # Determine information content, and subract remainder of attributes from it
     ig = info_entropy(df, predict_attr) - remainder(df, [sub_1, sub_2], predict_attr)
@@ -74,10 +71,10 @@ def info_gain(df, attribute, predict_attr, threshold):
 
 # Returns the number of positive and negative data
 def num_class(df, predict_attr):
-    low_df = df[df[predict_attr] == 5]
-    mid_df = df[df[predict_attr] == 6]
-    high_df = df[df[predict_attr] == 7]
-    return [low_df.shape[0], mid_df.shape[0], high_df.shape[0]]
+    low_df = df[df[predict_attr] == 5].shape[0]
+    mid_df = df[df[predict_attr] == 6].shape[0]
+    high_df = df.shape[0] - low_df - mid_df
+    return [low_df, mid_df, high_df]
 
 # Chooses the attribute and its threshold with the highest info gain
 # from the set of attributes
@@ -109,18 +106,14 @@ def build_tree(df, cols, predict_attr, minleaf):
     zero_counter = 0
 
     for n in nums:
-        if n == max_value:
-            max_counter += 1 
-        if n == 0:
-            zero_counter += 1
-    if max_counter == 1:
-        code = codes[max_index]
-    else:
-        code = 3
+        if n == max_value: max_counter += 1 
+        if n == 0: zero_counter += 1
+    if max_counter == 1: code = codes[max_index]
+    else: code = 3
 
     if zero_counter == 2 or df.shape[0] <= minleaf:
         # Create a leaf node indicating it's prediction
-        #print('leaf', nums, max_value, max_index, code)
+        # print('leaf', nums, max_value, max_index, code)
         leaf = Node(None,None)
         leaf.leaf = True
         leaf.predict = code
@@ -131,7 +124,7 @@ def build_tree(df, cols, predict_attr, minleaf):
         best_attr, threshold = choose_attr(df, cols, predict_attr)
         # Create internal tree node based on attribute and it's threshold
         tree = Node(best_attr, threshold)
-        sub_1 = df[df[best_attr] < threshold]
+        sub_1 = df[df[best_attr] <= threshold]
         sub_2 = df[df[best_attr] > threshold]
         # Recursively build left and right subtree
         tree.left = build_tree(sub_1, cols, predict_attr, minleaf)
@@ -164,33 +157,29 @@ def test_predictions(root, df):
 
 # Prints the tree level starting at given level
 def print_tree(root, level):
-    #print(counter*" ", end="")
-    if root.leaf:
-        print(root.predict)
-    else:
-        print(root.attr)
-    if root.left:
-        print_tree(root.left, level + 1)
-    if root.right:
-        print_tree(root.right, level + 1)
-
-# Cleans the input data, removes 'Diagnosis' column and adds 'Outcome' column
-# where 0 means healthy and 1 means colic
-def clean(csv_file_name):
-    df = pd.read_csv(csv_file_name)
-    cols = df.columns
-    df[cols] = df[cols].apply(pd.to_numeric, errors='coerce')
-    return df
+	print(12*" ", end="")
+	if root.leaf:
+		print(root.predict)
+	else:
+		print(root.attr)
+	if root.left:
+		print_tree(root.left, level + 1)
+	if root.right:
+		print_tree(root.right, level + 1)
 
 def main():
     # An example use of 'build_tree' and 'predict'
-    df_train = clean('wine.csv')
-    attributes =  list(df_train.columns[0: -1])
-    root = build_tree(df_train, attributes, df_train.columns[-1], 3)
+    df_train = pd.read_fwf('train')
+    #df_train[df_train.columns] = df_train[df_train.columns].apply(pd.to_numeric, errors='coerce')
 
+    attributes = list(df_train.columns[0: -1])
+    root = build_tree(df_train, attributes, df_train.columns[-1], 1)
+    #print_tree(root, 1)
     print("Accuracy of test data")
-    df_test = clean('wine.csv')
-    print(str(test_predictions(root, df_test) * 100.0) + '%')
+    #df_test = pd.read_fwf('test-sample')
+    #print(str(test_predictions(root, df_test) * 100.0) + '%')
 
 if __name__ == '__main__':
+    start_time = time.time()
     main()
+    print("--- %s seconds ---" % (time.time() - start_time))

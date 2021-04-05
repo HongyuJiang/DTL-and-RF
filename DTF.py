@@ -16,10 +16,10 @@ class Node(object):
 
 class DecisionTreeClassifier(object):
 
-    def __init__(self, data):
+    def __init__(self, data, minleaf):
         df_train = data
-        attributes =  list(df_train.columns[0: -1])
-        self.root = self.build_tree(df_train, attributes, df_train.columns[-1], 3) 
+        attributes = list(df_train.columns[0: -1])
+        self.root = self.build_tree(df_train, attributes, df_train.columns[-1], minleaf) 
 
     # First select the threshold of the attribute to split set of test data on
     # The threshold chosen splits the test data such that information gain is maximized
@@ -118,17 +118,16 @@ class DecisionTreeClassifier(object):
         max_index = nums.index(max_value)
         max_counter = 0
         zero_counter = 0
-
+        
         for n in nums:
             if n == max_value: max_counter += 1 
             if n == 0: zero_counter += 1
         if max_counter == 1: code = codes[max_index]
         else: code = 3
 
-        if zero_counter == 2 or df.shape[0] <= minleaf:
+        if zero_counter >= 1 or df.shape[0] <= minleaf:
             # Create a leaf node indicating it's prediction
-            #print('leaf', nums, max_value, max_index, code)
-            print(3, datetime.now())
+            # print(3, datetime.now())
             leaf = Node(None,None)
             leaf.leaf = True
             leaf.predict = code
@@ -136,7 +135,9 @@ class DecisionTreeClassifier(object):
         else:
             # Determine attribute and its threshold value with the highest
             # information gain
+            print(1, datetime.now())
             best_attr, threshold = self.choose_attr(df, cols, predict_attr)
+            print(2, datetime.now())
             # Create internal tree node based on attribute and it's threshold
             tree = Node(best_attr, threshold)
             sub_1 = df[df[best_attr] < threshold]
@@ -144,6 +145,7 @@ class DecisionTreeClassifier(object):
             # Recursively build left and right subtree
             tree.left = self.build_tree(sub_1, cols, predict_attr, minleaf)
             tree.right = self.build_tree(sub_2, cols, predict_attr, minleaf)
+            print(3, datetime.now())
             return tree
 
     # Given a instance of a training data, make a prediction of healthy or colic
@@ -173,8 +175,9 @@ def test_predictions(model, df):
 def main():
     # An example use of 'build_tree' and 'predict'
     dataset = pd.read_csv('wine.csv')
-    dataset = dataset.query('quality > 4 and quality < 8')
-    DT = DecisionTreeClassifier(dataset)
+    minleaf = 3
+    #dataset = dataset.query('quality > 4 and quality < 8')
+    DT = DecisionTreeClassifier(dataset, minleaf)
     print("Accuracy of test data")
     df_test = pd.read_csv('wine.csv')
     print(str(test_predictions(DT, df_test) * 100.0) + '%')
