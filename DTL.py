@@ -1,9 +1,7 @@
 import sys
 import math
 import pandas as pd
-from scipy.stats import entropy
 import time
-
 
 class Node(object):
     def __init__(self, attribute, threshold):
@@ -19,7 +17,6 @@ class Node(object):
 def select_threshold(df, attribute, predict_attr):
     # Convert dataframe column to a list and round each value
     values = df[attribute].tolist()
-    #values = [ float(x) for x in values]
     values = list(set(values))
     values.sort()
     # Remove duplicate values by converting the list to a set, then sort the set
@@ -37,6 +34,7 @@ def select_threshold(df, attribute, predict_attr):
 
 # Calculate info content (entropy) of the test data
 def info_entropy(df, predict_attr):
+
     # Dataframe and number of positive/negatives examples in the data
     low_df = df[df[predict_attr] == 5].shape[0]
     mid_df = df[df[predict_attr] == 6].shape[0]
@@ -146,14 +144,12 @@ def predict(node, row_df):
 
 # Given a set of data, make a prediction for each instance using the Decision Tree
 def test_predictions(root, df):
-    trans = [5, 6, 7, 'none']
+    trans = [5, 6, 7, 'unknown']
     num_data = df.shape[0]
     num_correct = 0
     for index,row in df.iterrows():
         prediction = predict(root, row)
-        if trans[prediction] == row['quality']:
-            num_correct += 1
-    return round(num_correct/num_data, 2)
+        print(trans[prediction])
 
 # Prints the tree level starting at given level
 def print_tree(root, level):
@@ -167,19 +163,24 @@ def print_tree(root, level):
 	if root.right:
 		print_tree(root.right, level + 1)
 
-def main():
+def main(trainFile, testFile, minleaf):
     # An example use of 'build_tree' and 'predict'
-    df_train = pd.read_fwf('train')
-    #df_train[df_train.columns] = df_train[df_train.columns].apply(pd.to_numeric, errors='coerce')
+    df_train = pd.read_fwf(trainFile)
+    df_train[df_train.columns] = df_train[df_train.columns].apply(pd.to_numeric, errors='coerce')
 
     attributes = list(df_train.columns[0: -1])
-    root = build_tree(df_train, attributes, df_train.columns[-1], 1)
+    root = build_tree(df_train, attributes, df_train.columns[-1], minleaf)
     #print_tree(root, 1)
-    print("Accuracy of test data")
-    #df_test = pd.read_fwf('test-sample')
-    #print(str(test_predictions(root, df_test) * 100.0) + '%')
+    df_test = pd.read_fwf(testFile)
+    test_predictions(root, df_test)
 
 if __name__ == '__main__':
     start_time = time.time()
-    main()
+    args = (sys.argv)
+
+    trainFile = args[1]
+    testFile = args[2]
+    minleaf = args[3]
+
+    main(trainFile, testFile, int(minleaf))
     print("--- %s seconds ---" % (time.time() - start_time))

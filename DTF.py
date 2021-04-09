@@ -26,16 +26,14 @@ class DecisionTreeClassifier(object):
     def select_threshold(self, df, attribute, predict_attr):
         # Convert dataframe column to a list and round each value
         values = df[attribute].tolist()
-        values = [ float(x) for x in values]
-        # Remove duplicate values by converting the list to a set, then sort the set
-        values = set(values)
-        values = list(values)
+        values = list(set(values))
         values.sort()
+        # Remove duplicate values by converting the list to a set, then sort the set
         max_ig = float("-inf")
         thres_val = 0
         # try all threshold values that are half-way between successive values in this sorted list
         for i in range(0, len(values) - 1):
-            thres = (values[i] + values[i+1])/2
+            thres = 0.5 * (values[i] + values[i+1])
             ig = self.info_gain(df, attribute, predict_attr, thres)
             if ig > max_ig:
                 max_ig = ig
@@ -46,20 +44,16 @@ class DecisionTreeClassifier(object):
     # Calculate info content (entropy) of the test data
     def info_entropy(self, df, predict_attr):
         # Dataframe and number of positive/negatives examples in the data
-        low_df = df[df[predict_attr] == 5]
-        mid_df = df[df[predict_attr] == 6]
-        high_df = df[df[predict_attr] == 7]
+        low_df = df[df[predict_attr] == 5].shape[0]
+        mid_df = df[df[predict_attr] == 6].shape[0]
+        high_df = df.shape[0] - low_df - mid_df
 
-        entropy = 0.0 
-
-        if low_df.shape[0] != 0:
-            entropy += -1 * float(low_df.shape[0]) * np.log2(float(low_df.shape[0]))
-        if mid_df.shape[0] != 0:
-            entropy += -1 * float(mid_df.shape[0]) * np.log2(float(mid_df.shape[0]))
-        if high_df.shape[0] != 0:
-            entropy += -1 * float(high_df.shape[0]) * np.log2(float(high_df.shape[0]))
+        e = 0
+        if low_df != 0: e += ((-1*low_df)/df.shape[0]) * math.log(low_df/df.shape[0], 2) 
+        if mid_df != 0: e += ((-1*mid_df)/df.shape[0]) * math.log(mid_df/df.shape[0], 2)
+        if high_df != 0: e += ((-1*high_df)/df.shape[0]) * math.log(high_df/df.shape[0], 2)
         # Calculate entropy
-        return entropy
+        return e
 
 
     # Calculates the weighted average of the entropy after an attribute test
@@ -83,11 +77,10 @@ class DecisionTreeClassifier(object):
 
     # Returns the number of positive and negative data
     def num_class(self, df, predict_attr):
-
-        low_df = df[df[predict_attr] == 5]
-        mid_df = df[df[predict_attr] == 6]
-        high_df = df[df[predict_attr] == 7]
-        return [low_df.shape[0], mid_df.shape[0], high_df.shape[0]]
+        low_df = df[df[predict_attr] == 5].shape[0]
+        mid_df = df[df[predict_attr] == 6].shape[0]
+        high_df = df.shape[0] - low_df - mid_df
+        return [low_df, mid_df, high_df]
 
     # Chooses the attribute and its threshold with the highest info gain
     # from the set of attributes
@@ -125,9 +118,8 @@ class DecisionTreeClassifier(object):
         if max_counter == 1: code = codes[max_index]
         else: code = 3
 
-        if zero_counter >= 1 or df.shape[0] <= minleaf:
+        if zero_counter == 2 or df.shape[0] <= minleaf:
             # Create a leaf node indicating it's prediction
-            # print(3, datetime.now())
             leaf = Node(None,None)
             leaf.leaf = True
             leaf.predict = code
@@ -135,23 +127,21 @@ class DecisionTreeClassifier(object):
         else:
             # Determine attribute and its threshold value with the highest
             # information gain
-            print(1, datetime.now())
             best_attr, threshold = self.choose_attr(df, cols, predict_attr)
-            print(2, datetime.now())
             # Create internal tree node based on attribute and it's threshold
             tree = Node(best_attr, threshold)
-            sub_1 = df[df[best_attr] < threshold]
+            sub_1 = df[df[best_attr] <= threshold]
             sub_2 = df[df[best_attr] > threshold]
             # Recursively build left and right subtree
             tree.left = self.build_tree(sub_1, cols, predict_attr, minleaf)
             tree.right = self.build_tree(sub_2, cols, predict_attr, minleaf)
-            print(3, datetime.now())
             return tree
 
     # Given a instance of a training data, make a prediction of healthy or colic
     # based on the Decision Tree
     # Assumes all data has been cleaned (i.e. no NULL data)
     def predict(self, node, row_df):
+        
         # If we are at a leaf node, return the prediction of the leaf node
         if node.leaf:
             return node.predict
@@ -160,27 +150,3 @@ class DecisionTreeClassifier(object):
             return self.predict(node.left, row_df)
         elif row_df[node.attr] > node.thres:
             return self.predict(node.right, row_df)
-
-# Given a set of data, make a prediction for each instance using the Decision Tree
-def test_predictions(model, df):
-    trans = [5, 6, 7, 'none']
-    num_data = df.shape[0]
-    num_correct = 0
-    for index, row in df.iterrows():
-        prediction = model.predict(model.root, row)
-        if trans[prediction] == row['quality']:
-            num_correct += 1
-    return round(num_correct/num_data, 2)
-
-def main():
-    # An example use of 'build_tree' and 'predict'
-    dataset = pd.read_csv('wine.csv')
-    minleaf = 3
-    #dataset = dataset.query('quality > 4 and quality < 8')
-    DT = DecisionTreeClassifier(dataset, minleaf)
-    print("Accuracy of test data")
-    df_test = pd.read_csv('wine.csv')
-    print(str(test_predictions(DT, df_test) * 100.0) + '%')
-
-if __name__ == '__main__':
-    main()
